@@ -52,7 +52,7 @@ class SecretKeys < DelegateClass(Hash)
     # Decrypt a string with the encryption key. If the value is not a string or it was
     # not encrypted with the encryption key, the value itself will be returned.
     #
-    # @param [String] encrypted_str Base64 encoded encrypted string with aes params (from `.encrypt`)
+    # @param [String] encrypted_str Base64 encoded encrypted string with aes params (from {.encrypt})
     # @param [String] secret_key 32 byte ASCII-8BIT encryption key
     # @return [String] decrypted string value
     def decrypt(encrypted_str, secret_key)
@@ -111,7 +111,13 @@ class SecretKeys < DelegateClass(Hash)
   # @param [String, #read, Hash] path_or_stream path to a json/yaml file to load, an IO object, or a Hash (mostly for testing purposes)
   # @param [String] encryption_key secret to use for encryption/decryption
   #
-  # @note If no encryption key is passed, this will defautl to env var SECRET_KEYS_ENCRYPTION_KEY
+  # @raise [EncryptionKeyError] if the provided encryption_key is invalid
+  #
+  # @note If no encryption key is passed, this will defautl to env var `SECRET_KEYS_ENCRYPTION_KEY`
+  #
+  # @example
+  #   load_json = SecretKeys.new('path/to/file.json', "my_super_secure_secret")
+  #   load_yaml = SecretKeys.new(File.open('path/to/file.yaml'), "my_OTHER_secure_secret")
   def initialize(path_or_stream, encryption_key = nil)
     encryption_key = ENV['SECRET_KEYS_ENCRYPTION_KEY'] if encryption_key.nil? || encryption_key.empty?
     update_secret(key: encryption_key)
@@ -162,8 +168,9 @@ class SecretKeys < DelegateClass(Hash)
   #
   # @param [String] path Filepath to save to. Supports yaml and json format as the extension
   # @param [Boolean] update: check to see if values have been changed before overwriting
+  # @param [:auto, :json, :yaml] format: force a particular format
   # @return [void]
-  def save(path, update: true)
+  def save(path, update: true, format: :auto)
     # create a copy of the encrypted hash for working on
     encrypted = encrypted_hash
 
@@ -177,7 +184,10 @@ class SecretKeys < DelegateClass(Hash)
       end
     end
 
-    output = (yaml_file?(path) ? YAML.dump(encrypted) : "#{JSON.pretty_generate(encrypted)}#{$/}")
+    # Allow forcing a save file type
+    yaml_format = (format == :yaml) || (format == :auto && yaml_file?(path))
+
+    output = (yaml_format ? YAML.dump(encrypted) : "#{JSON.pretty_generate(encrypted)}#{$/}")
     File.open(path, "w") do |file|
       file.write(output)
     end
